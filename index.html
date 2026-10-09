@@ -295,6 +295,7 @@
     // Nomes da nuvem que este aparelho escondeu.
     ocultos: ler("pdd.ocultos", []),
     pessoas: [],
+    erroNuvem: null,
     config: Object.assign({}, CFG_PADRAO, ler("pdd.config", {})),
     historico: ler("pdd.historico", {}),
     ultimoBlob: null
@@ -364,6 +365,10 @@
 
   function textoStatus() {
     var daNuvem = (estado.nuvem.profissionais || []).length;
+    if (estado.erroNuvem) {
+      return "Não consegui ler a lista da nuvem: " + estado.erroNuvem +
+        ". Conferir o arquivo equipe.json. Por enquanto valem os nomes deste aparelho.";
+    }
     if (daNuvem === 0) {
       return "Nenhuma equipe carregada da nuvem ainda. Os nomes abaixo estão só neste aparelho.";
     }
@@ -376,6 +381,7 @@
   }
 
   function carregarNuvem() {
+    estado.erroNuvem = null;
     // O endereço leva a hora atual para nunca cair em cache antigo, nem do
     // navegador nem de uma versão anterior do service worker.
     return fetch("./equipe.json?t=" + Date.now(), { cache: "no-store" })
@@ -399,8 +405,10 @@
           preencherAjustes();
         }
       })
-      .catch(function () {
-        // Sem internet ou rodando como arquivo local: segue com o que está guardado.
+      .catch(function (erro) {
+        // Sem internet, arquivo ausente ou JSON com erro de digitação.
+        // Guardar o motivo evita ficar adivinhando depois.
+        estado.erroNuvem = String((erro && erro.message) || erro);
       })
       .then(function () {
         // Primeira abertura sem nuvem nenhuma: deixa um exemplo para testar.
@@ -957,17 +965,13 @@
 (function () {
   if (!("serviceWorker" in navigator)) return;
   var recarregou = false;
-  // Quando uma versao nova assume o controle, a pagina recarrega uma vez
-  // sozinha. Sem isso, o aparelho continua rodando a versao velha.
   navigator.serviceWorker.addEventListener("controllerchange", function () {
     if (recarregou) return;
     recarregou = true;
     window.location.reload();
   });
   window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js").then(function (reg) {
-      reg.update();
-    }).catch(function () {});
+    navigator.serviceWorker.register("./sw.js").then(function (reg) { reg.update(); }).catch(function () {});
   });
 })();
 </script>
