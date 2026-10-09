@@ -187,6 +187,7 @@
     <div class="cartao">
       <div class="rotulo">Equipe na nuvem</div>
       <p class="nota" id="statusNuvem">Carregando…</p>
+      <p class="nota" id="versaoApp"></p>
       <div class="barra" style="margin-top: 10px">
         <button type="button" class="acao secundaria" id="btnAtualizarNuvem">Atualizar da nuvem</button>
         <button type="button" class="acao secundaria" id="btnGerarEquipe">Gerar equipe.json</button>
@@ -940,6 +941,9 @@
   }
 
   // ---------- início ----------
+  // Serve para conferir, no próprio aparelho, se a versão nova chegou.
+  $("versaoApp").textContent = "App versão 4";
+
   estado.escala = estado.historico[estado.data] || {};
   preencherSelect();
   preencherAjustes();

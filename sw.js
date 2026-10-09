@@ -1,7 +1,7 @@
 /* Service worker do Plantão do Dia.
    Guarda os arquivos no primeiro acesso para o app abrir sem internet.
    Ao publicar uma versão nova, troque o número do CACHE. */
-var CACHE = "plantao-do-dia-v3";
+var CACHE = "plantao-do-dia-v4";
 
 var ARQUIVOS = [
   "./",
@@ -37,6 +37,26 @@ self.addEventListener("activate", function (evento) {
 
 self.addEventListener("fetch", function (evento) {
   if (evento.request.method !== "GET") return;
+
+  // A própria página tenta sempre a rede primeiro. Sem isso, uma versão
+  // guardada em cache continua rodando para sempre, mesmo com o app novo
+  // publicado. Offline, cai na cópia guardada.
+  if (evento.request.mode === "navigate") {
+    evento.respondWith(
+      fetch(evento.request).then(function (resposta) {
+        var copia = resposta.clone();
+        caches.open(CACHE).then(function (cache) {
+          cache.put("./index.html", copia);
+        });
+        return resposta;
+      }).catch(function () {
+        return caches.match("./index.html").then(function (guardado) {
+          return guardado || Response.error();
+        });
+      })
+    );
+    return;
+  }
 
   // A lista da equipe tenta sempre a rede primeiro, para o aparelho receber
   // mudanças no mesmo dia. Sem internet, usa a última versão guardada.
