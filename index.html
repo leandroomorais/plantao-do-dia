@@ -954,11 +954,22 @@
 })();
 </script>
 <script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js").then(function (reg) { reg.update(); }).catch(function () {});
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+  var recarregou = false;
+  // Quando uma versao nova assume o controle, a pagina recarrega uma vez
+  // sozinha. Sem isso, o aparelho continua rodando a versao velha.
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    if (recarregou) return;
+    recarregou = true;
+    window.location.reload();
   });
-}
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js").then(function (reg) {
+      reg.update();
+    }).catch(function () {});
+  });
+})();
 </script>
 </body>
 </html>
