@@ -1,12 +1,13 @@
 /* Service worker do Plantão do Dia.
    Guarda os arquivos no primeiro acesso para o app abrir sem internet.
    Ao publicar uma versão nova, troque o número do CACHE. */
-var CACHE = "plantao-do-dia-v1";
+var CACHE = "plantao-do-dia-v2";
 
 var ARQUIVOS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./equipe.json",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-maskable.png"
@@ -36,6 +37,25 @@ self.addEventListener("activate", function (evento) {
 
 self.addEventListener("fetch", function (evento) {
   if (evento.request.method !== "GET") return;
+
+  // A lista da equipe tenta sempre a rede primeiro, para o aparelho receber
+  // mudanças no mesmo dia. Sem internet, usa a última versão guardada.
+  if (evento.request.url.indexOf("equipe.json") >= 0) {
+    evento.respondWith(
+      fetch(evento.request).then(function (resposta) {
+        var copia = resposta.clone();
+        caches.open(CACHE).then(function (cache) {
+          cache.put(evento.request, copia);
+        });
+        return resposta;
+      }).catch(function () {
+        return caches.match(evento.request).then(function (guardado) {
+          return guardado || Response.error();
+        });
+      })
+    );
+    return;
+  }
 
   evento.respondWith(
     caches.match(evento.request).then(function (guardado) {

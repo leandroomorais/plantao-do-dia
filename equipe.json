@@ -1,0 +1,22 @@
+{
+  "versao": 1,
+  "atualizado_em": "2026-10-09",
+  "profissionais": [
+    { "nome": "Luciana", "funcao": "recepcionista" },
+    { "nome": "Mayane", "funcao": "medico" },
+    { "nome": "Isaías", "funcao": "enfermeiro" },
+    { "nome": "Alice", "funcao": "tecnico" },
+    { "nome": "Daniele", "funcao": "tecnico" },
+    { "nome": "Daniel", "funcao": "motorista" }
+  ],
+  "config": {
+    "orgao": "Prefeitura Municipal de Major Sales · RN",
+    "titulo": "EQUIPE PLANTONISTA",
+    "rodape": "Atendimento 24 horas",
+    "whatsapp": "(84) 98183-3522",
+    "endereco": "Rua Marieta Fernandes, 34 — Centro, Major Sales/RN",
+    "cor": "00627B",
+    "legenda": "EQUIPE PLANTONISTA\nHospital e Maternidade Mãe Tetê\n{dia}, {data}\n\n{lista}\n\nAtendimento 24 horas · WhatsApp {whatsapp}",
+    "legendaCurta": "Equipe plantonista de {dia}, {data}."
+  }
+}

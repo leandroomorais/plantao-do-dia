@@ -144,7 +144,7 @@
 <main>
   <section id="aba-escala">
     <div class="aviso">
-      Tudo fica salvo neste aparelho. Funciona sem internet depois do primeiro acesso.
+      A lista da equipe vem da nuvem. As escalas e os ajustes ficam neste aparelho.
     </div>
 
     <div class="cartao">
@@ -184,6 +184,14 @@
   </section>
 
   <section id="aba-pessoas" hidden>
+    <div class="cartao">
+      <div class="rotulo">Equipe na nuvem</div>
+      <p class="nota" id="statusNuvem">Carregando…</p>
+      <div class="barra" style="margin-top: 10px">
+        <button type="button" class="acao secundaria" id="btnAtualizarNuvem">Atualizar da nuvem</button>
+        <button type="button" class="acao secundaria" id="btnGerarEquipe">Gerar equipe.json</button>
+      </div>
+    </div>
     <div class="cartao">
       <div class="linha">
         <div style="flex: 1 1 180px">
@@ -279,7 +287,13 @@
   var estado = {
     data: hojeIso(),
     escala: {},
-    pessoas: ler("pdd.pessoas", []),
+    // A lista oficial vem do arquivo equipe.json publicado junto com o app.
+    nuvem: ler("pdd.nuvem", { profissionais: [], config: null, atualizado_em: null }),
+    // Nomes incluídos aqui no aparelho, que ainda não foram para a nuvem.
+    extras: ler("pdd.extras", []),
+    // Nomes da nuvem que este aparelho escondeu.
+    ocultos: ler("pdd.ocultos", []),
+    pessoas: [],
     config: Object.assign({}, CFG_PADRAO, ler("pdd.config", {})),
     historico: ler("pdd.historico", {}),
     ultimoBlob: null
@@ -326,6 +340,84 @@
   }
 
   function $(id) { return document.getElementById(id); }
+
+  // ---------- equipe vinda da nuvem ----------
+  function chaveDe(p) { return p.funcao + "|" + String(p.nome).trim().toLowerCase(); }
+
+  function recomputarPessoas() {
+    var vistos = {};
+    var lista = [];
+    function juntar(fonte, origem) {
+      fonte.forEach(function (p) {
+        if (!p || !p.nome) return;
+        var k = chaveDe(p);
+        if (vistos[k] || estado.ocultos.indexOf(k) >= 0) return;
+        vistos[k] = true;
+        lista.push({ nome: String(p.nome).trim(), funcao: p.funcao, origem: origem });
+      });
+    }
+    juntar(estado.nuvem.profissionais || [], "nuvem");
+    juntar(estado.extras || [], "local");
+    estado.pessoas = lista;
+  }
+
+  function textoStatus() {
+    var daNuvem = (estado.nuvem.profissionais || []).length;
+    if (daNuvem === 0) {
+      return "Nenhuma equipe carregada da nuvem ainda. Os nomes abaixo estão só neste aparelho.";
+    }
+    var quando = estado.nuvem.atualizado_em
+      ? " (atualizada em " + String(estado.nuvem.atualizado_em).slice(0, 10).split("-").reverse().join("/") + ")"
+      : "";
+    var locais = (estado.extras || []).length;
+    return daNuvem + " nome(s) vindos da nuvem" + quando +
+      (locais > 0 ? " · " + locais + " só neste aparelho" : "");
+  }
+
+  function carregarNuvem() {
+    return fetch("./equipe.json", { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("sem arquivo");
+        return r.json();
+      })
+      .then(function (dados) {
+        if (!dados || !Array.isArray(dados.profissionais)) throw new Error("formato");
+        estado.nuvem = {
+          profissionais: dados.profissionais,
+          config: dados.config || null,
+          atualizado_em: dados.atualizado_em || null
+        };
+        gravar("pdd.nuvem", estado.nuvem);
+        // Os ajustes da peça também vêm da nuvem, a menos que este aparelho
+        // já tenha mexido neles.
+        if (dados.config && !ler("pdd.configLocal", false)) {
+          estado.config = Object.assign({}, CFG_PADRAO, dados.config);
+          gravar("pdd.config", estado.config);
+          preencherAjustes();
+        }
+      })
+      .catch(function () {
+        // Sem internet ou rodando como arquivo local: segue com o que está guardado.
+      })
+      .then(function () {
+        // Primeira abertura sem nuvem nenhuma: deixa um exemplo para testar.
+        if ((estado.nuvem.profissionais || []).length === 0 && estado.extras.length === 0) {
+          estado.extras = [
+            { nome: "Luciana", funcao: "recepcionista" },
+            { nome: "Mayane", funcao: "medico" },
+            { nome: "Isaías", funcao: "enfermeiro" },
+            { nome: "Alice", funcao: "tecnico" },
+            { nome: "Daniele", funcao: "tecnico" },
+            { nome: "Daniel", funcao: "motorista" }
+          ];
+          gravar("pdd.extras", estado.extras);
+        }
+        recomputarPessoas();
+        $("statusNuvem").textContent = textoStatus();
+        desenharPessoas();
+        desenharFuncoes();
+      });
+  }
 
   // ---------- abas ----------
   var botoesAba = document.querySelectorAll("nav button");
@@ -447,16 +539,32 @@
           var li = document.createElement("li");
           var nome = document.createElement("span");
           nome.textContent = p.nome;
+          if (p.origem === "local") {
+            var marca = document.createElement("small");
+            marca.style.color = "var(--fraco)";
+            marca.textContent = " · só neste aparelho";
+            nome.appendChild(marca);
+          }
           var excluir = document.createElement("button");
           excluir.className = "link";
           excluir.type = "button";
           excluir.textContent = "Excluir";
           excluir.addEventListener("click", function () {
-            if (!confirm("Excluir " + p.nome + "?")) return;
-            estado.pessoas = estado.pessoas.filter(function (x) {
-              return !(x.nome === p.nome && x.funcao === p.funcao);
-            });
-            gravar("pdd.pessoas", estado.pessoas);
+            var aviso = p.origem === "nuvem"
+              ? "Esconder " + p.nome + " neste aparelho?\n\nEle continua na lista da nuvem e volta se você publicar um equipe.json novo."
+              : "Excluir " + p.nome + "?";
+            if (!confirm(aviso)) return;
+            if (p.origem === "nuvem") {
+              estado.ocultos.push(chaveDe(p));
+              gravar("pdd.ocultos", estado.ocultos);
+            } else {
+              estado.extras = estado.extras.filter(function (x) {
+                return chaveDe(x) !== chaveDe(p);
+              });
+              gravar("pdd.extras", estado.extras);
+            }
+            recomputarPessoas();
+            $("statusNuvem").textContent = textoStatus();
             desenharPessoas();
             desenharFuncoes();
           });
@@ -474,16 +582,40 @@
     var nome = $("novoNome").value.trim();
     var funcao = $("novaFuncao").value;
     if (!nome) return;
+    var novo = { nome: nome, funcao: funcao };
+    // Se o nome estava escondido, incluir de volta apenas o reativa.
+    estado.ocultos = estado.ocultos.filter(function (k) { return k !== chaveDe(novo); });
+    gravar("pdd.ocultos", estado.ocultos);
     var repetido = estado.pessoas.some(function (p) {
-      return p.funcao === funcao && p.nome.toLowerCase() === nome.toLowerCase();
+      return chaveDe(p) === chaveDe(novo);
     });
     if (!repetido) {
-      estado.pessoas.push({ nome: nome, funcao: funcao });
-      gravar("pdd.pessoas", estado.pessoas);
+      estado.extras.push(novo);
+      gravar("pdd.extras", estado.extras);
     }
     $("novoNome").value = "";
+    recomputarPessoas();
+    $("statusNuvem").textContent = textoStatus();
     desenharPessoas();
     desenharFuncoes();
+  });
+
+  $("btnAtualizarNuvem").addEventListener("click", function () {
+    $("statusNuvem").textContent = "Buscando…";
+    carregarNuvem();
+  });
+
+  $("btnGerarEquipe").addEventListener("click", function () {
+    var conteudo = JSON.stringify({
+      versao: 1,
+      atualizado_em: new Date().toISOString(),
+      profissionais: estado.pessoas.map(function (p) {
+        return { nome: p.nome, funcao: p.funcao };
+      }),
+      config: estado.config
+    }, null, 2);
+    baixar(new Blob([conteudo], { type: "application/json" }), "equipe.json");
+    alert("Arquivo equipe.json baixado.\n\nSuba ele no repositório do GitHub, por cima do antigo, para todos os aparelhos receberem esta lista.");
   });
 
   $("btnExportar").addEventListener("click", function () {
@@ -508,15 +640,21 @@
         if (!dados || !Array.isArray(dados.profissionais)) throw new Error("formato");
         dados.profissionais.forEach(function (p) {
           if (!p || !p.nome) return;
+          var novo = { nome: String(p.nome), funcao: p.funcao };
           var repetido = estado.pessoas.some(function (x) {
-            return x.funcao === p.funcao && x.nome.toLowerCase() === String(p.nome).toLowerCase();
+            return chaveDe(x) === chaveDe(novo);
           });
-          if (!repetido) estado.pessoas.push({ nome: String(p.nome), funcao: p.funcao });
+          if (!repetido) estado.extras.push(novo);
         });
-        if (dados.config) estado.config = Object.assign({}, CFG_PADRAO, dados.config);
-        gravar("pdd.pessoas", estado.pessoas);
+        if (dados.config) {
+          estado.config = Object.assign({}, CFG_PADRAO, dados.config);
+          gravar("pdd.configLocal", true);
+        }
+        gravar("pdd.extras", estado.extras);
         gravar("pdd.config", estado.config);
         preencherAjustes();
+        recomputarPessoas();
+        $("statusNuvem").textContent = textoStatus();
         desenharPessoas();
         desenharFuncoes();
         alert("Backup importado.");
@@ -552,7 +690,9 @@
       legendaCurta: $("cfgLegendaCurta").value
     };
     gravar("pdd.config", estado.config);
-    alert("Ajustes salvos.");
+    // A partir daqui este aparelho não aceita mais os ajustes que vêm da nuvem.
+    gravar("pdd.configLocal", true);
+    alert("Ajustes salvos neste aparelho.");
   });
 
   // ---------- desenho da peça ----------
@@ -798,23 +938,13 @@
   }
 
   // ---------- início ----------
-  if (estado.pessoas.length === 0) {
-    estado.pessoas = [
-      { nome: "Luciana", funcao: "recepcionista" },
-      { nome: "Mayane", funcao: "medico" },
-      { nome: "Isaías", funcao: "enfermeiro" },
-      { nome: "Alice", funcao: "tecnico" },
-      { nome: "Daniele", funcao: "tecnico" },
-      { nome: "Daniel", funcao: "motorista" }
-    ];
-    gravar("pdd.pessoas", estado.pessoas);
-  }
-
   estado.escala = estado.historico[estado.data] || {};
   preencherSelect();
   preencherAjustes();
+  recomputarPessoas();
   desenharPessoas();
   desenharFuncoes();
+  carregarNuvem();
 })();
 </script>
 <script>
