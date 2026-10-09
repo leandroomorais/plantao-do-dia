@@ -1,7 +1,7 @@
 /* Service worker do Plantão do Dia.
    Guarda os arquivos no primeiro acesso para o app abrir sem internet.
    Ao publicar uma versão nova, troque o número do CACHE. */
-var CACHE = "plantao-do-dia-v2";
+var CACHE = "plantao-do-dia-v3";
 
 var ARQUIVOS = [
   "./",
@@ -44,12 +44,13 @@ self.addEventListener("fetch", function (evento) {
     evento.respondWith(
       fetch(evento.request).then(function (resposta) {
         var copia = resposta.clone();
+        // Guarda sempre sob o endereço sem a hora, senão o cache cresce sem fim.
         caches.open(CACHE).then(function (cache) {
-          cache.put(evento.request, copia);
+          cache.put("./equipe.json", copia);
         });
         return resposta;
       }).catch(function () {
-        return caches.match(evento.request).then(function (guardado) {
+        return caches.match("./equipe.json").then(function (guardado) {
           return guardado || Response.error();
         });
       })

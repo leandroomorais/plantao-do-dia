@@ -375,7 +375,9 @@
   }
 
   function carregarNuvem() {
-    return fetch("./equipe.json", { cache: "no-store" })
+    // O endereço leva a hora atual para nunca cair em cache antigo, nem do
+    // navegador nem de uma versão anterior do service worker.
+    return fetch("./equipe.json?t=" + Date.now(), { cache: "no-store" })
       .then(function (r) {
         if (!r.ok) throw new Error("sem arquivo");
         return r.json();
@@ -950,7 +952,7 @@
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js").catch(function () {});
+    navigator.serviceWorker.register("./sw.js").then(function (reg) { reg.update(); }).catch(function () {});
   });
 }
 </script>
